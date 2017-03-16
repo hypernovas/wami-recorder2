@@ -113,6 +113,10 @@ Wami.setup = function (options) {
             _options.onLoaded = options.onLoaded;
         }
 
+		if (options.onSecurityStarted) {
+			_options.onSecurityStarted = options.onSecurityStarted;
+		}
+
         if (options.onSecurity) {
             _options.onSecurity = options.onSecurity;
         }
@@ -143,6 +147,9 @@ Wami.setup = function (options) {
         if (settings.microphone.granted) {
             _options.onReady();
         } else {
+            if (_options.onSecurityStarted) {
+                _options.onSecurityStarted();
+            }
             // Show any Flash settings panel you want:
             // http://help.adobe.com/en_US/FlashPlatform/reference/actionscript/3/flash/system/SecurityPanel.html
             Wami.showSecurity("privacy", "Wami.show", Wami
@@ -175,9 +182,32 @@ Wami.setup = function (options) {
                 + version
                 + " or greater<br />https://get.adobe.com/flashplayer/";
 
-        // This is the minimum size due to the microphone security panel
-        Wami.swfobject.embedSWF(_options.swfUrl, id, 214, 137, version, null,
-                flashVars, params);
+        // The minimum size for the security panel is 214 by 137....but Flash does not scale with the browser zoom level.
+        // So, we must determine the zoom level and then scale this accordinglu.  If the security dialogue
+        // is partially blocked the user won't be able to interact with it (part of Flash's clickjacking protection)
+        // Flash is pain is Flash
+        // Note: detecting browser zoom level is hard and the below isn't perfect. Something better is needed to
+        // detect zoom level consistently. Wami.swf itself could be updated to detect this.
+
+        // try a couple things to get zoom level and use the most conservative
+        var zoom_level_checks = [
+                window.outerWidth / window.innerWidth,
+                document.documentElement.offsetHeight / window.innerHeight];
+        if (window.jQuery) {
+            zoom_level_checks.push(document.width / jQuery(document).width());
+        }
+
+        // Get the smallest (most conservative) of these values;
+        var browser_zoom_level = Math.min.apply(null,
+            // filter for sane values
+            zoom_level_checks.filter(function (n) { return n > 0 && n < 10; })
+        );
+        var scale_factor = 1.0 / browser_zoom_level;
+        var flash_width = 214 * scale_factor + 1;
+        var flash_height = 137 * scale_factor + 1;
+
+        Wami.swfobject.embedSWF(_options.swfUrl, id, flash_width, flash_height, version, null,
+            flashVars, params);
 
         // Without this line, Firefox has a dotted outline of the flash
         Wami.swfobject.createCSS("#" + id, "outline:none");
@@ -211,6 +241,9 @@ Wami.setup = function (options) {
 
         function delegate(name) {
             Wami[name] = function () {
+                if (!(name in recorder) && console && console.error) {
+                    console.error("Attempting to call a flash function that doesn't exist.  An error has occured in the Flash object.");
+                }
                 return recorder[name].apply(recorder, arguments);
             };
         }
@@ -253,7 +286,7 @@ Wami.setup = function (options) {
 
         Wami.hide = function () {
             // Hiding flash in all the browsers is tricky. Please read:
-            // https://code.google.com/p/wami-recorder/wiki/HidingFlash
+            // https://code.google.com/archive/p/wami-recorder/wikis/Quirks.wiki
             if (!supportsTransparency()) {
                 recorder.style.visibility = "hidden";
             }

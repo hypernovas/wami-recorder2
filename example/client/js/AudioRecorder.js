@@ -21,7 +21,7 @@ function AudioRecorder(script_base, url, el, save_url, onReadyCb) {
 	$(el).append('<div id="flash"></div>');
 
 	$.ajax({
-		url: script_base + '/recorder.js',
+		url: script_base + '/WamiRecorder.js',
 		dataType: 'script',
 		cache: true
 	}).done(function() {
